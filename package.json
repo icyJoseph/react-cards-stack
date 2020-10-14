@@ -54,6 +54,11 @@
       "limit": "10 KB"
     }
   ],
+  "jest": {
+    "moduleNameMapper": {
+      "\\.(css|less)$": "<rootDir>/__mocks__/styleMock.ts"
+    }
+  },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^4.6.0",
     "@types/react": "^16.9.52",

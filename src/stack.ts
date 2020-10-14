@@ -98,26 +98,26 @@ const init = (
   }: Pick<Options, 'perspective' | 'perspectiveOrigin' | 'visible'>
 ) => {
   if (!el) return;
+
   el.style.perspective = perspective + 'px';
+
   el.style.perspectiveOrigin = perspectiveOrigin;
 
-  for (const i in items) {
-    const index = parseInt(i);
-
-    const item = items[index];
-
+  items.forEach((item, index) => {
     if (index < visible) {
       item.style.opacity = '1';
+
       item.style.pointerEvents = 'auto';
+
       item.style.zIndex = index === 0 ? `${visible + 1}` : `${visible - index}`;
 
       item.style.transform = `translate3d(
-          0, 0,-${50 * index}px)`;
+        0, 0,-${50 * index}px)`;
     } else {
       item.style.transform = `translate3d(
         0,0,-${visible * 50}px)`;
     }
-  }
+  });
 
   items[current].classList.add('stack__item--current');
 };
@@ -163,6 +163,9 @@ const animate = (
     stackItemsAnimation
   );
 };
+
+const next = (current: number, total: number) =>
+  current < total - 1 ? current + 1 : 0;
 
 const calculatePosition = (
   index: number,
@@ -244,13 +247,11 @@ export function Stack<T extends HTMLElement>(
       }
     });
 
-    for (const i in items) {
-      const index = parseInt(i);
+    // if (index >= visible) break;
+    // if (!infinite && current + index + 1 >= items.length) break;
+    const maxIndex = items.length - 1 - current;
 
-      if (index >= visible) break;
-
-      if (!infinite && current + index >= items.length - 1) break;
-
+    items.slice(0, Math.min(visible, maxIndex)).forEach((_, index) => {
       const position = calculatePosition(index, items.length, current, options);
 
       const item = items[position];
@@ -289,9 +290,10 @@ export function Stack<T extends HTMLElement>(
           animate(index, item, el, options);
         }
       }, stackItemsAnimationDelay);
-    }
+    });
 
-    current = current < items.length - 1 ? current + 1 : 0;
+    current = next(current, items.length);
+
     items[current].classList.add('stack__item--current');
   };
 

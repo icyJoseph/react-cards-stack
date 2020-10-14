@@ -31,7 +31,7 @@ const onEndAnimation = (el: HTMLElement, callback: () => void) => {
 
 type Animation = {
   // if true, then the settings.properties parameter will be distributed through the items in a non equal fashion
-  // for instance, if we set settings.properties = {translateX:100} and we have options.visible = 4,
+  // for instance, if we set settings.properties = {translateX:100} and we have visible = 4,
   // then the second item on the stack will translate 100px, the second one 75px and the third 50px
   elastic: boolean;
   // object that is passed into the dynamicsjs animate function - second parameter -  (see more at http://dynamicsjs.com/)
@@ -87,76 +87,115 @@ const defaultOptions: Options = {
   stackItemsAnimationDelay: 0,
 };
 
+const init = (
+  el: HTMLElement,
+  current: number,
+  items: HTMLElement[],
+  {
+    perspective,
+    perspectiveOrigin,
+    visible,
+  }: Pick<Options, 'perspective' | 'perspectiveOrigin' | 'visible'>
+) => {
+  if (!el) return;
+  el.style.perspective = perspective + 'px';
+  el.style.perspectiveOrigin = perspectiveOrigin;
+
+  for (const index in items) {
+    const item = items[index];
+
+    if (parseInt(index) < visible) {
+      item.style.opacity = '1';
+      item.style.pointerEvents = 'auto';
+      item.style.zIndex =
+        parseInt(index) === 0
+          ? `${visible + 1}`
+          : `${visible - parseInt(index)}`;
+
+      item.style.transform = `translate3d(
+          0, 0,-${50 * parseInt(index)}px)`;
+    } else {
+      item.style.transform = `translate3d(
+        0,0,-${visible * 50}px)`;
+    }
+  }
+
+  items[current].classList.add('stack__item--current');
+};
+
+const normalizeVisible = (
+  { visible, infinite }: Pick<Options, 'visible' | 'infinite'>,
+  total: number
+) => {
+  if (visible <= 0) {
+    return 1;
+  }
+
+  if (infinite) {
+    if (visible >= total) {
+      return 1;
+    }
+  } else {
+    if (visible > total) {
+      return 1;
+    }
+  }
+  return visible;
+};
+
+const animate = (
+  index: number,
+  item: HTMLElement,
+  element: HTMLElement,
+  {
+    visible,
+    stackItemsAnimation,
+  }: Pick<Options, 'visible' | 'stackItemsAnimation'>
+) => {
+  element.style.pointerEvents = 'auto';
+  element.style.opacity = '1';
+  element.style.zIndex = `${visible - index}`;
+
+  dynamics.animate(
+    item,
+    {
+      translateZ: -`${50 * index}`,
+    },
+    stackItemsAnimation
+  );
+};
+
 export function Stack<T extends HTMLElement>(
   elem: T | null,
   opts: Partial<Options>
 ) {
-  let el = elem;
+  if (!elem) return null;
 
-  if (!el) return null;
+  const el = elem;
 
   const items = Array.from(el.children) as HTMLElement[];
 
   const itemsTotal = items.length;
-  let options = { ...defaultOptions, ...opts };
 
-  if (
-    (options.infinite && options.visible >= itemsTotal) ||
-    (!options.infinite && options.visible > itemsTotal) ||
-    options.visible <= 0
-  ) {
-    options.visible = 1;
-  }
+  const options = { ...defaultOptions, ...opts };
+
+  const {
+    infinite,
+    onEndStack,
+    stackItemsAnimationDelay,
+    stackItemsPreAnimation,
+  } = options;
+
+  const visible = normalizeVisible(options, itemsTotal);
 
   let current = 0;
   let hasEnded = false;
   let isAnimating = false;
 
-  // set the initial styles for the visible items
-  const _init = () => {
-    if (!el) return;
-    el.style.perspective = options.perspective + 'px';
-    el.style.perspectiveOrigin = options.perspectiveOrigin;
+  init(el, current, items, options);
 
-    for (const index in items) {
-      const item = items[index];
-
-      if (parseInt(index) < options.visible) {
-        item.style.opacity = '1';
-        item.style.pointerEvents = 'auto';
-        item.style.zIndex =
-          parseInt(index) === 0
-            ? `${options.visible + 1}`
-            : `${options.visible - parseInt(index)}`;
-
-        item.style.transform = `translate3d(
-            0, 0,-${50 * parseInt(index)}px)`;
-      } else {
-        item.style.transform = `translate3d(
-          0,0,-${options.visible * 50}px)`;
-      }
-    }
-
-    items[current].classList.add('stack__item--current');
-  };
-
-  _init();
-
-  const reject = (callback?: () => void) => {
-    _next('reject', callback);
-  };
-
-  const accept = (callback?: () => void) => {
-    _next('accept', callback);
-  };
-
-  const restart = () => {
-    hasEnded = false;
-    _init();
-  };
-
-  const _next = function(action: 'accept' | 'reject', callback?: () => void) {
-    if (isAnimating || (!options.infinite && hasEnded)) return;
+  const _next = (action: 'accept' | 'reject', callback?: () => void) => {
+    if (isAnimating || (!infinite && hasEnded)) return;
     isAnimating = true;
 
     // current item
@@ -173,26 +212,24 @@ export function Stack<T extends HTMLElement>(
       currentItem.style.pointerEvents = 'none';
       currentItem.style.zIndex = '-1';
       currentItem.style.transform = `
-      translate3d(0px, 0px, -${options.visible * 50}px)`;
+      translate3d(0px, 0px, -${visible * 50}px)`;
 
       currentItem.classList.remove(
         action === 'accept' ? 'stack__item--accept' : 'stack__item--reject'
       );
 
-      currentItem.style.zIndex = `${options.visible + 1}`;
+      currentItem.style.zIndex = `${visible + 1}`;
       isAnimating = false;
 
       if (callback) callback();
 
-      if (!options.infinite && current === 0) {
+      if (!infinite && current === 0) {
         hasEnded = true;
         // callback
-        options.onEndStack();
+        onEndStack();
       }
     });
 
-    // set style for the other items
-    let { visible, infinite } = options;
     for (let i = 0; i < itemsTotal; ++i) {
       if (i >= visible) break;
 
@@ -210,27 +247,14 @@ export function Stack<T extends HTMLElement>(
       const item = items[pos];
       // stack items animation
 
-      const animate = (element: HTMLElement, opts: Options) => {
-        element.style.pointerEvents = 'auto';
-        element.style.opacity = '1';
-        element.style.zIndex = `${opts.visible - i}`;
-
-        dynamics.animate(
-          item,
-          {
-            translateZ: -`${50 * i}`,
-          },
-          opts.stackItemsAnimation
-        );
-      };
       setTimeout(() => {
         let preAnimation;
 
-        if (options.stackItemsPreAnimation) {
+        if (stackItemsPreAnimation) {
           preAnimation =
             action === 'accept'
-              ? options.stackItemsPreAnimation.accept
-              : options.stackItemsPreAnimation.reject;
+              ? stackItemsPreAnimation.accept
+              : stackItemsPreAnimation.reject;
         }
 
         if (preAnimation) {
@@ -239,7 +263,7 @@ export function Stack<T extends HTMLElement>(
 
           for (let key in preAnimation.animationProperties) {
             let interval = preAnimation.elastic
-              ? preAnimation.animationProperties[key] / options.visible
+              ? preAnimation.animationProperties[key] / visible
               : 0;
             animProps[key] =
               preAnimation.animationProperties[key] - Number(i * interval);
@@ -249,23 +273,31 @@ export function Stack<T extends HTMLElement>(
           animProps.translateZ = -`${50 * (i + 1)}`;
 
           preAnimation.animationSettings.complete = () => {
-            animate(item, options);
+            animate(i, item, el, options);
           };
 
           dynamics.animate(item, animProps, preAnimation.animationSettings);
         } else {
-          animate(item, options);
+          animate(i, item, el, options);
         }
-      }, options.stackItemsAnimationDelay);
+      }, stackItemsAnimationDelay);
     }
 
     current = current < itemsTotal - 1 ? current + 1 : 0;
     items[current].classList.add('stack__item--current');
   };
 
-  const updateOpts = (next: Options) => {
-    options = { ...options, ...next };
+  const reject = (callback?: () => void) => {
+    _next('reject', callback);
   };
 
-  return { accept, reject, restart, updateOpts };
+  const accept = (callback?: () => void) => {
+    _next('accept', callback);
+  };
+
+  const restart = () => {
+    hasEnded = false;
+    init(el, current, items, options);
+  };
+  return { accept, reject, restart };
 }

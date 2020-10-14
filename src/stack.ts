@@ -101,19 +101,18 @@ const init = (
   el.style.perspective = perspective + 'px';
   el.style.perspectiveOrigin = perspectiveOrigin;
 
-  for (const index in items) {
+  for (const i in items) {
+    const index = parseInt(i);
+
     const item = items[index];
 
-    if (parseInt(index) < visible) {
+    if (index < visible) {
       item.style.opacity = '1';
       item.style.pointerEvents = 'auto';
-      item.style.zIndex =
-        parseInt(index) === 0
-          ? `${visible + 1}`
-          : `${visible - parseInt(index)}`;
+      item.style.zIndex = index === 0 ? `${visible + 1}` : `${visible - index}`;
 
       item.style.transform = `translate3d(
-          0, 0,-${50 * parseInt(index)}px)`;
+          0, 0,-${50 * index}px)`;
     } else {
       item.style.transform = `translate3d(
         0,0,-${visible * 50}px)`;
@@ -165,6 +164,20 @@ const animate = (
   );
 };
 
+const calculatePosition = (
+  index: number,
+  total: number,
+  current: number,
+  { infinite }: Pick<Options, 'infinite'>
+) => {
+  if (infinite) {
+    return current + index < total - 1
+      ? current + index + 1
+      : index - (total - current - 1);
+  }
+  return current + index + 1;
+};
+
 export function Stack<T extends HTMLElement>(
   elem: T | null,
   opts: Partial<Options>
@@ -172,13 +185,10 @@ export function Stack<T extends HTMLElement>(
   if (!elem) return null;
 
   const el = elem;
-
   const items = Array.from(el.children) as HTMLElement[];
-
-  const itemsTotal = items.length;
-
   const options = { ...defaultOptions, ...opts };
 
+  // global options for this instance
   const {
     infinite,
     onEndStack,
@@ -186,8 +196,9 @@ export function Stack<T extends HTMLElement>(
     stackItemsPreAnimation,
   } = options;
 
-  const visible = normalizeVisible(options, itemsTotal);
+  const visible = normalizeVisible(options, items.length);
 
+  // controls
   let current = 0;
   let hasEnded = false;
   let isAnimating = false;
@@ -225,27 +236,20 @@ export function Stack<T extends HTMLElement>(
 
       if (!infinite && current === 0) {
         hasEnded = true;
-        // callback
         onEndStack();
       }
     });
 
-    for (let i = 0; i < itemsTotal; ++i) {
-      if (i >= visible) break;
+    for (const i in items) {
+      const index = parseInt(i);
 
-      let pos;
-      if (!infinite) {
-        if (current + i >= itemsTotal - 1) break;
-        pos = current + i + 1;
-      } else {
-        pos =
-          current + i < itemsTotal - 1
-            ? current + i + 1
-            : i - (itemsTotal - current - 1);
-      }
+      if (index >= visible) break;
 
-      const item = items[pos];
-      // stack items animation
+      if (!infinite && current + index >= items.length - 1) break;
+
+      const position = calculatePosition(index, items.length, current, options);
+
+      const item = items[position];
 
       setTimeout(() => {
         let preAnimation;
@@ -265,25 +269,26 @@ export function Stack<T extends HTMLElement>(
             let interval = preAnimation.elastic
               ? preAnimation.animationProperties[key] / visible
               : 0;
+
             animProps[key] =
-              preAnimation.animationProperties[key] - Number(i * interval);
+              preAnimation.animationProperties[key] - index * interval;
           }
 
           // this one remains the same..
-          animProps.translateZ = -`${50 * (i + 1)}`;
+          animProps.translateZ = -`${50 * (index + 1)}`;
 
           preAnimation.animationSettings.complete = () => {
-            animate(i, item, el, options);
+            animate(index, item, el, options);
           };
 
           dynamics.animate(item, animProps, preAnimation.animationSettings);
         } else {
-          animate(i, item, el, options);
+          animate(index, item, el, options);
         }
       }, stackItemsAnimationDelay);
     }
 
-    current = current < itemsTotal - 1 ? current + 1 : 0;
+    current = current < items.length - 1 ? current + 1 : 0;
     items[current].classList.add('stack__item--current');
   };
 

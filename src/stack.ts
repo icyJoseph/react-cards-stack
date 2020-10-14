@@ -170,12 +170,15 @@ const calculatePosition = (
   current: number,
   { infinite }: Pick<Options, 'infinite'>
 ) => {
+  const next = current + index + 1;
+
   if (infinite) {
-    return current + index < total - 1
-      ? current + index + 1
-      : index - (total - current - 1);
+    if (next > total) {
+      return next - total;
+    }
   }
-  return current + index + 1;
+
+  return next;
 };
 
 export function Stack<T extends HTMLElement>(
@@ -230,6 +233,7 @@ export function Stack<T extends HTMLElement>(
       );
 
       currentItem.style.zIndex = `${visible + 1}`;
+
       isAnimating = false;
 
       if (callback) callback();
@@ -274,7 +278,6 @@ export function Stack<T extends HTMLElement>(
               preAnimation.animationProperties[key] - index * interval;
           }
 
-          // this one remains the same..
           animProps.translateZ = -`${50 * (index + 1)}`;
 
           preAnimation.animationSettings.complete = () => {

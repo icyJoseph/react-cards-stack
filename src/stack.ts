@@ -111,11 +111,9 @@ const init = (
 
       item.style.zIndex = index === 0 ? `${visible + 1}` : `${visible - index}`;
 
-      item.style.transform = `translate3d(
-        0, 0,-${50 * index}px)`;
+      item.style.transform = `translate3d(0, 0, -${50 * index}px)`;
     } else {
-      item.style.transform = `translate3d(
-        0,0,-${visible * 50}px)`;
+      item.style.transform = `translate3d(0, 0, -${visible * 50}px)`;
     }
   });
 
@@ -145,15 +143,14 @@ const normalizeVisible = (
 const animate = (
   index: number,
   item: HTMLElement,
-  element: HTMLElement,
   {
     visible,
     stackItemsAnimation,
   }: Pick<Options, 'visible' | 'stackItemsAnimation'>
 ) => {
-  element.style.pointerEvents = 'auto';
-  element.style.opacity = '1';
-  element.style.zIndex = `${visible - index}`;
+  item.style.pointerEvents = 'auto';
+  item.style.opacity = '1';
+  item.style.zIndex = `${visible - index}`;
 
   dynamics.animate(
     item,
@@ -173,10 +170,10 @@ const calculatePosition = (
   current: number,
   { infinite }: Pick<Options, 'infinite'>
 ) => {
-  const next = current + index + 1;
+  const next = current + index;
 
   if (infinite) {
-    if (next > total) {
+    if (next + 1 > total) {
       return next - total;
     }
   }
@@ -228,8 +225,7 @@ export function Stack<T extends HTMLElement>(
       currentItem.style.opacity = '0';
       currentItem.style.pointerEvents = 'none';
       currentItem.style.zIndex = '-1';
-      currentItem.style.transform = `
-      translate3d(0px, 0px, -${visible * 50}px)`;
+      currentItem.style.transform = `translate3d(0px, 0px, -${visible * 50}px)`;
 
       currentItem.classList.remove(
         action === 'accept' ? 'stack__item--accept' : 'stack__item--reject'
@@ -247,27 +243,22 @@ export function Stack<T extends HTMLElement>(
       }
     });
 
-    // if (index >= visible) break;
-    // if (!infinite && current + index + 1 >= items.length) break;
-    const maxIndex = items.length - 1 - current;
+    const maxIndex = infinite ? items.length : items.length - current;
 
-    items.slice(0, Math.min(visible, maxIndex)).forEach((_, index) => {
-      const position = calculatePosition(index, items.length, current, options);
-
-      const item = items[position];
-
+    items.slice(0, Math.min(visible + 1, maxIndex)).forEach((_, index) => {
       setTimeout(() => {
-        let preAnimation;
+        const position = calculatePosition(
+          index,
+          items.length,
+          current,
+          options
+        );
 
-        if (stackItemsPreAnimation) {
-          preAnimation =
-            action === 'accept'
-              ? stackItemsPreAnimation.accept
-              : stackItemsPreAnimation.reject;
-        }
+        const item = items[position];
+
+        let preAnimation = stackItemsPreAnimation?.[action];
 
         if (preAnimation) {
-          // items "pre animation" properties
           const animProps: Record<string, unknown> = {};
 
           for (let key in preAnimation.animationProperties) {
@@ -282,12 +273,12 @@ export function Stack<T extends HTMLElement>(
           animProps.translateZ = -`${50 * (index + 1)}`;
 
           preAnimation.animationSettings.complete = () => {
-            animate(index, item, el, options);
+            animate(index, item, options);
           };
 
           dynamics.animate(item, animProps, preAnimation.animationSettings);
         } else {
-          animate(index, item, el, options);
+          animate(index, item, options);
         }
       }, stackItemsAnimationDelay);
     });
